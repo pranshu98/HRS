@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  MyJavaLambdaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: HRS-MyJavaLambdaFunction
+      ImageUri: 'hrs-java-example:latest'
+      PackageType: Image
+      Timeout: 60
+      MemorySize: 512
+      Role: arn:aws:iam::HRS_ACCOUNT_ID:role/lambda-role
+      ImageConfig:
+        Command:
+          - "java"
+          - "-jar"
+          - "app.jar"
+        Port: 8080
