@@ -1,0 +1,84 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_IMAGE = 'hrs-java-example'
+        IMAGE_TAG = 'latest'
+        AWS_REGION = 'us-west-2'
+        SAM_TEMPLATE = 'template.yaml'
+        SAM_STACK_NAME = 'hrs-sam-stack'
+        DEPLOYMENT_TARGET = 'lambda' 
+        NOTIFICATION_EMAIL = 'jain.pranshu98@gmail.com'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git 'https://github.com/bzdgn/docker-spring-boot-java-web-service-example.git'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    def customImage = docker.build("${DOCKER_IMAGE}:${IMAGE_TAG}", '-f Dockerfile .')
+                    customImage.tag("${DOCKER_IMAGE}:${IMAGE_TAG}")
+                }
+            }
+        }
+
+        stage('Test') {
+            steps {
+                script {
+                    docker.image("${DOCKER_IMAGE}:${IMAGE_TAG}").inside {
+                        sh 'mvn test'
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to AWS Lambda') {
+            when {
+                expression { return env.DEPLOYMENT_TARGET == 'lambda' }
+            }
+            steps {
+                script {
+                    sh """
+                    sam build --template-file ${SAM_TEMPLATE}
+                    """
+                    sh """
+                    sam deploy \
+                        --template-file .aws-sam/build/template.yaml \
+                        --stack-name ${SAM_STACK_NAME} \
+                        --capabilities CAPABILITY_IAM \
+                        --region ${AWS_REGION} \
+                        --no-confirm-changeset
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+
+            emailext(
+                to: "${NOTIFICATION_EMAIL}",
+                subject: "Jenkins Build Succeeded: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "The build for ${env.JOB_NAME} #${env.BUILD_NUMBER} has succeeded. Check the build details at ${env.BUILD_URL}."
+            )
+        }
+
+        failure {
+            emailext(
+                to: "${NOTIFICATION_EMAIL}",
+                subject: "Jenkins Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: "The build for ${env.JOB_NAME} #${env.BUILD_NUMBER} has failed. Check the build details at ${env.BUILD_URL}."
+            )
+        }
+
+        always {
+            echo 'Pipeline completed.'
+        }
+    }
+}
